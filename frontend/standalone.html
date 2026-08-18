@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>表データ 品質チェック — 集計前に汚れを見つける</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+<style>
+body{font-family:system-ui,sans-serif;background:#f5f6f8;margin:0;padding:24px;color:#1a1a2e}
+.wrap{max-width:920px;margin:0 auto} h1{font-size:23px;color:#0f766e;margin-bottom:4px}
+h2{font-size:17px;margin:2px 0 8px} h3{font-size:14px;margin:12px 0 4px} .sub{color:#8a8f9c;font-size:12px}
+.card{background:#fff;border-radius:12px;padding:18px;margin:14px 0;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.stepbadge{display:inline-block;background:#0f766e;color:#fff;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:bold;margin-bottom:8px}
+.intro{background:#e6f5f3;border-radius:12px;padding:16px;font-size:14px;line-height:1.9}
+.intro .q{font-weight:bold;color:#0f766e;font-size:15px;margin-top:12px}
+.intro .q:first-child{margin-top:0}
+.guide{background:#fffbeb;border:2px dashed #f0c86a;border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.8;color:#7a5b00}
+.guide b{color:#5c4400}
+table{border-collapse:collapse;width:100%;font-size:13.5px} th,td{border:1px solid #dde;padding:8px 6px;text-align:center} th{background:#e6f5f3;font-size:12.5px}
+td.l,th.l{text-align:left} tbody tr:nth-child(even){background:#fafbfd}
+td input,td select{border:1.5px solid #b9cbe4;border-radius:6px;padding:6px;font-size:14px}
+td input{width:78px;text-align:right} td input.nm{width:150px;text-align:left} td select{background:#fff}
+input.big,textarea{width:100%;border:1.5px solid #b9cbe4;border-radius:8px;padding:10px;font-size:14px;font-family:inherit}
+textarea{min-height:130px;line-height:1.7}
+.metrics{display:flex;gap:12px;flex-wrap:wrap} .metric{flex:1;min-width:145px;background:#e6f5f3;border-radius:10px;padding:14px;text-align:center}
+.metric .val{font-size:25px;font-weight:bold;color:#0f766e} .metric .l{font-size:12px;color:#556;margin-top:4px;line-height:1.5}
+.verdict{border-radius:12px;padding:18px;margin:10px 0}
+.vgood{background:#e7f7ef;border:2px solid #17a673} .vmid{background:#fff8e6;border:2px solid #f0a500} .vbad{background:#fdeeee;border:2px solid #e0533b}
+.verdict .big{font-size:20px;font-weight:bold} .verdict .desc{font-size:14px;line-height:1.9;margin-top:8px}
+.todo{background:#e6f5f3;border:1px solid #d6e4f7;border-radius:10px;padding:14px;margin-top:10px}
+.todo li{margin:9px 0;line-height:1.8;font-size:14px}
+.chk{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid #eef1f5;font-size:14px;line-height:1.7}
+.chk .mark{font-size:18px;flex-shrink:0;width:24px}
+button{border:0;border-radius:9px;cursor:pointer;font-size:14px;padding:10px 16px}
+button.go{background:#0f766e;color:#fff;font-size:15px} button.add{background:#0f766e;color:#fff;margin-top:10px}
+button.ghost{background:#eef2f8;color:#0f766e;margin-left:8px;font-size:13px;padding:9px 14px}
+button.del{background:#f7e4e4;color:#c0392b;padding:4px 10px;font-size:15px}
+.src{background:#f7f9fb;border:1px solid #e0e6ec;border-left:4px solid #8a8f9c;border-radius:8px;padding:12px;font-size:13px;color:#445;line-height:1.9;margin:10px 0}
+.src b{color:#1a1a2e} .src div{margin:4px 0}
+.note{color:#8a8f9c;font-size:12px;line-height:1.7}
+.bar{background:#eef1f5;border-radius:7px;height:28px;overflow:hidden;margin:5px 0}
+.bar>div{height:28px;border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding-right:9px;color:#fff;font-size:13px;font-weight:bold}
+.pill{padding:3px 10px;border-radius:12px;font-size:11.5px;font-weight:bold;white-space:nowrap}
+pre{background:#f7f9fb;border:1px solid #e0e6ec;border-radius:8px;padding:12px;overflow-x:auto;font-size:12.5px;line-height:1.6}
+@media(max-width:640px){body{padding:12px} .wrap{max-width:100%} h1{font-size:19px}
+ table{display:block;overflow-x:auto;white-space:nowrap;font-size:12.5px} .metrics{flex-direction:column}}
+</style>
+</head>
+<body>
+<div style="max-width:900px;margin:0 auto 4px;background:#fff8e1;border:1px solid #f0d98a;border-radius:10px;padding:10px 14px;font:13.5px system-ui;color:#7a5b00">🔬 <b>入力するだけで計算します</b>：ExcelやCSVを貼り付けると、<b>空欄・重複・全角数字・日付の混在・極端な値</b>などを自動で検出します。　AIサービスへの接続は不要で、計算はすべてこの画面の中で行われます。</div>
+<div id="root"></div>
+<script type="text/plain" id="__jsx">
+// ===== 自動保存 & データ書き出し/読み込み =====
+const STORE="dataqc_v1";
+function usePersist(name,initial){
+  const [v,setV]=React.useState(function(){
+    try{var s=localStorage.getItem(STORE+":"+name);return s?JSON.parse(s):initial;}catch(e){return initial;}
+  });
+  React.useEffect(function(){try{localStorage.setItem(STORE+":"+name,JSON.stringify(v));}catch(e){}},[name,v]);
+  return [v,setV];
+}
+function collectAll(){var o={};for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);
+  if(k&&k.indexOf(STORE+":")===0){try{o[k.slice(STORE.length+1)]=JSON.parse(localStorage.getItem(k));}catch(e){}}}return o;}
+function DataBar(){
+  const [msg,setMsg]=React.useState(""); const fileRef=React.useRef(null);
+  const save=function(){try{
+      var blob=new Blob([JSON.stringify({_tool:STORE,_savedAt:new Date().toISOString(),data:collectAll()},null,2)],{type:"application/json"});
+      var a=document.createElement("a");a.href=URL.createObjectURL(blob);
+      a.download=STORE+"_"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(a.href);
+      setMsg("書き出しました");setTimeout(function(){setMsg("");},2500);}catch(e){setMsg("書き出しに失敗しました");}};
+  const load=function(e){var f=e.target.files&&e.target.files[0];if(!f)return;var rd=new FileReader();
+    rd.onload=function(){try{var j=JSON.parse(rd.result);if(!j||!j.data)throw new Error("形式が違います");
+      Object.keys(j.data).forEach(function(k){localStorage.setItem(STORE+":"+k,JSON.stringify(j.data[k]));});
+      location.reload();}catch(err){setMsg("読み込めませんでした");}};rd.readAsText(f);};
+  const clear=function(){if(!confirm("入力した内容をすべて消して最初の状態に戻します。よろしいですか？"))return;
+    var del=[];for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf(STORE+":")===0)del.push(k);}
+    del.forEach(function(k){localStorage.removeItem(k);});location.reload();};
+  return (<div style={{background:"#f2f7f4",border:"1px solid #cfe3d8",borderRadius:10,padding:"9px 12px",
+      margin:"0 0 12px",fontSize:13,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",color:"#0f5c3f"}}>
+    <span>💾 <b>入力した内容はこの端末に自動保存されます</b>（閉じても消えません）</span>
+    <span style={{flex:1}}></span>
+    <button onClick={save} style={{border:0,borderRadius:7,background:"#17a673",color:"#fff",padding:"6px 11px",cursor:"pointer",fontSize:12.5}}>データを書き出す</button>
+    <button onClick={function(){fileRef.current&&fileRef.current.click();}} style={{border:0,borderRadius:7,background:"#e7f0eb",color:"#0f5c3f",padding:"6px 11px",cursor:"pointer",fontSize:12.5}}>読み込む</button>
+    <button onClick={clear} style={{border:0,borderRadius:7,background:"#f7e4e4",color:"#c0392b",padding:"6px 11px",cursor:"pointer",fontSize:12.5}}>最初に戻す</button>
+    <input ref={fileRef} type="file" accept="application/json" onChange={load} style={{display:"none"}}/>
+    {msg && <span style={{fontWeight:"bold"}}>{msg}</span>}
+  </div>);
+}
+function Intro(){
+  return (<div className="card"><div className="intro">
+    <div className="q">🎯 このツールで分かること</div><div>集計や分析を始める前に、データの間違いを見つけます。「合計が合わない」「数字が実態と違う」の原因のほとんどはここにあります。</div>
+    <div className="q">🙋 こんな人向け</div><div>・Excelで<b>集計や名簿管理</b>をしている人<br/>・他部署や外部から<b>もらったデータを扱う</b>人<br/>・分析の前処理に時間を取られている人</div>
+    <div className="q">📝 やること</div><div>ExcelやスプレッドシートからコピーしてOK。<b>貼り付けるだけ</b>で点検が始まります。</div>
+  </div></div>);
+}
+
+const SAMPLE=["氏名,メールアドレス,金額,登録日",
+"田中太郎,tanaka@example.com,12000,2026/04/01",
+"佐藤 花子,sato@example.com,8500,2026-04-05",
+"鈴木一郎,suzuki@example,9800,2026/4/10",
+"田中太郎,tanaka@example.com,12000,2026/04/01",
+"高橋 実,,15000,2026/04/12",
+"伊藤 学,ito@example.com,１２０００,2026/04/15",
+"渡辺 修,watanabe@example.com,-500,2026/04/18",
+"山本 涼,yamamoto@example.com,980000,2026/04/20"].join("\n");
+
+const EMAIL=/^[^@\s]+@[^@\s.]+\.[^@\s]+$/;
+const DATEPAT=[
+  {re:/^\d{4}\/\d{1,2}\/\d{1,2}$/, name:"2026/4/1形式"},
+  {re:/^\d{4}-\d{1,2}-\d{1,2}$/,     name:"2026-4-1形式"},
+  {re:/^\d{4}年\d{1,2}月\d{1,2}日$/,  name:"2026年4月1日形式"},
+];
+const ZEN=/[０-９]/;
+
+function parseCsv(text){
+  const lines=(text||"").split(/\r?\n/).filter(l=>l.trim()!=="");
+  if(lines.length===0)return {head:[],rows:[]};
+  const split=l=>l.split(",").map(s=>s.trim());
+  return {head:split(lines[0]), rows:lines.slice(1).map(split)};
+}
+function analyze(text){
+  const {head,rows}=parseCsv(text);
+  if(head.length===0)return null;
+  const issues=[];
+  const colCount=head.length;
+  // 1) 列数が違う行
+  rows.forEach((r,i)=>{ if(r.length!==colCount)
+    issues.push({type:"列数の不一致",row:i+2,detail:"見出しは"+colCount+"列ですが、この行は"+r.length+"列です",fix:"カンマの数を揃えてください（項目内にカンマがある場合は\"で囲む）"});});
+  // 2) 空欄
+  rows.forEach((r,i)=>r.forEach((c,j)=>{ if(c==="")
+    issues.push({type:"空欄",row:i+2,col:head[j]||("列"+(j+1)),detail:"「"+(head[j]||"")+"」が空です",fix:"値を入れるか、意図的な空欄なら「なし」等を入れる"});}));
+  // 3) 重複行
+  const seen={};
+  rows.forEach((r,i)=>{const k=r.join("|");
+    if(seen[k]!==undefined)issues.push({type:"重複",row:i+2,detail:(seen[k]+"行目とまったく同じ内容です"),fix:"どちらかを削除してください"});
+    else seen[k]=i+2;});
+  // 4) 列ごとの型のばらつき
+  head.forEach((h,j)=>{
+    const vals=rows.map(r=>r[j]).filter(v=>v!==undefined&&v!=="");
+    if(vals.length===0)return;
+    // メール列
+    if(/mail|メール/i.test(h)){
+      vals.forEach((v,i)=>{ if(!EMAIL.test(v))
+        issues.push({type:"形式が不正",row:i+2,col:h,detail:"「"+v+"」はメールアドレスの形になっていません",fix:"@とドメイン(.com等)があるか確認"});});
+    }
+    // 数値列
+    const numLike=vals.filter(v=>/^[-−]?[\d０-９,，.]+$/.test(v)).length;
+    if(numLike>=vals.length*0.6){
+      vals.forEach((v,i)=>{
+        if(ZEN.test(v))issues.push({type:"全角数字",row:i+2,col:h,detail:"「"+v+"」に全角数字が混ざっています",fix:"半角に統一（Excelなら ASC関数）"});
+        const n=Number(String(v).replace(/[,，]/g,"").replace(/[０-９]/g,d=>String.fromCharCode(d.charCodeAt(0)-0xFEE0)));
+        if(!isNaN(n)&&n<0)issues.push({type:"マイナス値",row:i+2,col:h,detail:"「"+v+"」がマイナスです",fix:"返金・値引きなら別の列に分けると集計しやすくなります"});
+      });
+      // 外れ値（平均から大きく離れた値）
+      const nums=vals.map(v=>Number(String(v).replace(/[,，]/g,"").replace(/[０-９]/g,d=>String.fromCharCode(d.charCodeAt(0)-0xFEE0)))).filter(n=>!isNaN(n));
+      if(nums.length>=4){
+        const m=nums.reduce((a,b)=>a+b,0)/nums.length;
+        const sd=Math.sqrt(nums.reduce((a,b)=>a+Math.pow(b-m,2),0)/nums.length);
+        if(sd>0)nums.forEach((n,i)=>{ if(Math.abs(n-m)>3*sd)
+          issues.push({type:"極端な値",row:i+2,col:h,detail:"「"+n.toLocaleString()+"」は他と大きく離れています（平均"+Math.round(m).toLocaleString()+"）",fix:"桁の打ち間違いがないか確認してください"});});
+      }
+    }
+    // 日付列
+    if(/日|date/i.test(h)){
+      const fmt={};
+      vals.forEach(v=>{const p=DATEPAT.find(d=>d.re.test(v)); fmt[p?p.name:"その他"]=(fmt[p?p.name:"その他"]||0)+1;});
+      if(Object.keys(fmt).length>1)
+        issues.push({type:"日付の書き方が混在",col:h,detail:Object.entries(fmt).map(([k,v])=>k+"が"+v+"件").join(" / "),fix:"どれか1つに統一してください（例: 2026-04-01）"});
+    }
+  });
+  const byType={};
+  issues.forEach(x=>{byType[x.type]=(byType[x.type]||0)+1;});
+  const cells=rows.length*colCount;
+  const score=cells>0?Math.max(0,Math.round(100-issues.length/cells*100*3)):0;
+  return {head,rows,issues,byType,score,cells};
+}
+function level(s){return s>=90?["そのまま集計できます","vgood"]:s>=70?["直してから使ってください","vmid"]:["このまま集計すると間違えます","vbad"];}
+
+function App(){
+  const [text,setText]=usePersist("text",SAMPLE);
+  const a=analyze(text);
+  const lv=a?level(a.score):["","vmid"];
+
+  return (<div className="wrap"><DataBar/>
+    <h1>表データ 品質チェック</h1>
+    <div className="sub" style={{marginBottom:10}}>集計する前に、データの汚れを見つけます。</div>
+    <Intro/>
+
+    <div className="card">
+      <div className="stepbadge">STEP 1</div>
+      <h2>データを貼り付けてください</h2>
+      <div className="guide">
+        👇 <b>ここに貼ってください。</b>ExcelやGoogleスプレッドシートから<b>そのままコピーして貼るだけ</b>です。<br/>
+        1行目は「見出し（項目名）」にしてください。貼った瞬間に点検が始まります。
+      </div>
+      <textarea style={{marginTop:10}} value={text} onChange={e=>setText(e.target.value)}
+        placeholder="氏名,メールアドレス,金額&#10;田中太郎,tanaka@example.com,12000"/>
+      {a && <div className="sub">{a.rows.length}行 × {a.head.length}列（{a.cells}マス）／ 見出し: {a.head.join(" ／ ")}</div>}
+      <div className="src">
+        <b>❓ 何を調べているの？</b>
+        <div>・<b>空欄・重複行・列数の不一致・全角数字・マイナス値・極端な値・日付形式の混在・メール形式</b>を、この画面の中で実際に検査しています。</div>
+        <div>・<b>データは外部に一切送信されません。</b>ブラウザの中だけで処理するので、顧客名簿でも安全に使えます。</div>
+        <div>・最初に入っているデータは<b>使い方を示すための例</b>です（架空の名前・メールです）。</div>
+        <div>・「極端な値」は<b>平均から標準偏差の3倍以上離れた値</b>を機械的に拾っています。正しい値のこともあります。</div>
+      </div>
+    </div>
+
+    {a && <div className="card">
+      <div className="stepbadge">STEP 2</div>
+      <h2>点検結果</h2>
+      <div className={"verdict "+lv[1]}>
+        <div className="big">{a.score}点 / 100 — {lv[0]}</div>
+        <div className="desc">{a.issues.length===0
+          ? "問題は見つかりませんでした。このまま集計・分析に進んで大丈夫です。"
+          : <span>気になる箇所が <b>{a.issues.length}件</b> あります。
+            {Object.entries(a.byType).map(([k,v])=>k+"("+v+")").join(" / ")}</span>}</div>
+      </div>
+      {a.issues.length>0 && <div>
+        <h3>見つかった箇所（上から順に直してください）</h3>
+        <table><thead><tr><th>種類</th><th>場所</th><th className="l">内容</th><th className="l">直し方</th></tr></thead>
+          <tbody>{a.issues.slice(0,40).map((x,i)=>(<tr key={i}>
+            <td><span className="pill" style={{background:"#fdeeee",color:"#c0392b"}}>{x.type}</span></td>
+            <td>{x.row?x.row+"行目":"—"}{x.col?" / "+x.col:""}</td>
+            <td className="l">{x.detail}</td>
+            <td className="l" style={{fontSize:12.5}}>{x.fix}</td></tr>))}
+          </tbody></table>
+        {a.issues.length>40 && <div className="sub">※ほか{a.issues.length-40}件は省略しています。</div>}
+      </div>}
+    </div>}
+
+    {a && <div className="card">
+      <div className="stepbadge">STEP 3</div>
+      <h2>なぜ直す必要があるのか</h2>
+      <div className="todo">
+        <b>放っておくとこうなります</b>
+        <ul>
+          {a.byType["重複"] && <li><b>重複（{a.byType["重複"]}件）</b>：売上や件数が<b>実際より多く</b>集計されます。報告した数字が間違っていた、という事故につながります。</li>}
+          {a.byType["空欄"] && <li><b>空欄（{a.byType["空欄"]}件）</b>：平均を出すときに、空欄を0として計算するか除外するかで<b>結果が変わります</b>。</li>}
+          {a.byType["全角数字"] && <li><b>全角数字（{a.byType["全角数字"]}件）</b>：Excelが文字として扱うため<b>合計に入りません</b>。合計が合わない原因の多くがこれです。</li>}
+          {a.byType["日付の書き方が混在"] && <li><b>日付の混在</b>：並べ替えが正しくできず、月別集計がずれます。</li>}
+          {a.byType["極端な値"] && <li><b>極端な値（{a.byType["極端な値"]}件）</b>：平均が引っ張られて実態とかけ離れます。桁の打ち間違いを疑ってください。</li>}
+          {a.byType["形式が不正"] && <li><b>メール形式の誤り（{a.byType["形式が不正"]}件）</b>：メール配信が届かず、機会損失になります。</li>}
+          {a.byType["列数の不一致"] && <li><b>列数の不一致</b>：読み込み時に列がずれ、別の項目の値が入ります。最も危険な状態です。</li>}
+          {a.issues.length===0 && <li>問題は見つかりませんでした。分析に進んでください。</li>}
+        </ul>
+      </div>
+      <div className="todo">
+        <b>次にやること</b>
+        <ul>
+          <li><b>元のファイルを直す</b>：ここでの修正はできません。行番号を見ながら元データを直してください。</li>
+          <li><b>直したらもう一度貼る</b>：100点に近づくまで繰り返すのが確実です。</li>
+          <li><b>入力ルールを決める</b>：同じ間違いが毎回起きるなら、入力フォーム側で制限（半角のみ・必須項目）をかけると根本的に解決します。</li>
+        </ul>
+      </div>
+    </div>}
+
+    <p className="note">※検査は貼り付けられたデータだけを使った実処理です（外部送信なし）。<br/>
+    ※「極端な値」「マイナス値」は<b>間違いとは限りません</b>（返金・大口取引など）。必ず中身を確認してください。<br/>
+    ※点数は「問題件数 ÷ 全マス数」から算出した当社独自の目安で、公的な基準ではありません。<br/>
+    ※項目の中にカンマを含むデータ（"東京都, 港区" など）は正しく分割できないことがあります。</p>
+  </div>);
+}
+
+</script>
+<script>(function(){var src=document.getElementById("__jsx").textContent;var out=Babel.transform(src,{presets:[["react",{runtime:"classic"}]]}).code;(0,eval)(out);ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));})();</script>
+</body></html>
